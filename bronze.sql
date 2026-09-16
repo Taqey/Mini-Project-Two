@@ -1,4 +1,6 @@
 --bronze phase
+USE CentralSuperStoreDB;
+
 IF OBJECT_ID('bronze.RawData', 'U') IS NULL
 BEGIN
 
@@ -103,3 +105,9 @@ SELECT
 FROM bronze.RawData;
 
 select * from bronze.RawData;
+
+SELECT RowID, Profit, 
+       ASCII(RIGHT(Profit, 1)) AS last_char_ascii,
+       LEN(Profit) AS raw_len,
+       LEN(LTRIM(RTRIM(Profit))) AS trimmed_len
+FROM bronze.RawData;

@@ -1,4 +1,6 @@
 --staging phase
+USE CentralSuperStoreDB;
+
 IF OBJECT_ID('staging.RawData', 'U') IS NULL
 BEGIN
     CREATE TABLE staging.RawData
@@ -37,7 +39,7 @@ WITH (
     FIRSTROW = 2,
     FIELDQUOTE = '"',
     FIELDTERMINATOR = ',',
-    ROWTERMINATOR = '0x0a',
+    ROWTERMINATOR = '0x0d0a',
     CODEPAGE = '65001',
     MAXERRORS = 0,
     ERRORFILE = 'D:\Data Analysis\sql\MINI PROJECT\RawDataLogs.log'

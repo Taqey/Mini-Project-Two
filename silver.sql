@@ -1,3 +1,5 @@
+USE CentralSuperStoreDB;
+
 IF OBJECT_ID('silver.RawData', 'U') IS NULL
 BEGIN
 CREATE TABLE silver.RawData
