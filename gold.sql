@@ -1,7 +1,8 @@
 USE CentralSuperStoreDB;
+GO
 
 -- =========================================================
--- DIM CUSTOMER
+-- DIM CUSTOMER  (Table + View)
 -- =========================================================
 IF OBJECT_ID('gold.DIMCustomer', 'U') IS NULL
 BEGIN
@@ -11,7 +12,7 @@ BEGIN
         CustomerID   NVARCHAR(50),
         CustomerName NVARCHAR(50),
         Segment      NVARCHAR(50)
-    )
+    );
 END;
 GO
 
@@ -23,14 +24,9 @@ WHERE NOT EXISTS (
 );
 GO
 
-INSERT INTO gold.DIMCustomer (CustomerID, CustomerName, Segment)
-SELECT CustomerID, CustomerName, Segment
-FROM gold.vw_DIMCustomerStaging;
-GO
-
 
 -- =========================================================
--- DIM PRODUCT
+-- DIM PRODUCT  (Table + View)
 -- =========================================================
 IF OBJECT_ID('gold.DIMProduct', 'U') IS NULL
 BEGIN
@@ -41,7 +37,7 @@ BEGIN
         ProductName NVARCHAR(255),
         Category    NVARCHAR(50),
         SubCategory NVARCHAR(50)
-    )
+    );
 END;
 GO
 
@@ -53,14 +49,9 @@ WHERE NOT EXISTS (
 );
 GO
 
-INSERT INTO gold.DIMProduct (ProductID, ProductName, Category, SubCategory)
-SELECT ProductID, ProductName, Category, SubCategory
-FROM gold.vw_DIMProductStaging;
-GO
-
 
 -- =========================================================
--- DIM GEOGRAPHY
+-- DIM GEOGRAPHY  (Table + View)
 -- =========================================================
 IF OBJECT_ID('gold.DIMGeography', 'U') IS NULL
 BEGIN
@@ -72,7 +63,7 @@ BEGIN
         State        NVARCHAR(50),
         PostalCode   NVARCHAR(10),
         Region       NVARCHAR(50)
-    )
+    );
 END;
 GO
 
@@ -89,14 +80,9 @@ WHERE NOT EXISTS (
 );
 GO
 
-INSERT INTO gold.DIMGeography (Country, City, State, PostalCode, Region)
-SELECT Country, City, State, PostalCode, Region
-FROM gold.vw_DIMGeographyStaging;
-GO
-
 
 -- =========================================================
--- DIM SHIPPING
+-- DIM SHIPPING  (Table + View)
 -- =========================================================
 IF OBJECT_ID('gold.DIMShipping', 'U') IS NULL
 BEGIN
@@ -104,7 +90,7 @@ BEGIN
     (
         ShippingKey INT IDENTITY(1,1) PRIMARY KEY,
         ShipMode    NVARCHAR(50)
-    )
+    );
 END;
 GO
 
@@ -116,26 +102,21 @@ WHERE NOT EXISTS (
 );
 GO
 
-INSERT INTO gold.DIMShipping (ShipMode)
-SELECT ShipMode
-FROM gold.vw_DIMShippingStaging;
-GO
-
 
 -- =========================================================
--- DIM DATE
+-- DIM DATE  (Table + View)
 -- =========================================================
 IF OBJECT_ID('gold.DIMDate', 'U') IS NULL
 BEGIN
     CREATE TABLE gold.DIMDate
     (
-        DateKey INT PRIMARY KEY,   -- صيغة YYYYMMDD كـ surrogate key
+        DateKey INT PRIMARY KEY,
         [Date]  DATE,
         [Year]  INT,
         Quarter INT,
         [Month] INT,
         [Day]   INT
-    )
+    );
 END;
 GO
 
@@ -158,14 +139,9 @@ WHERE NOT EXISTS (
 );
 GO
 
-INSERT INTO gold.DIMDate (DateKey, [Date], [Year], Quarter, [Month], [Day])
-SELECT DateKey, [Date], [Year], Quarter, [Month], [Day]
-FROM gold.vw_DIMDateStaging;
-GO
-
 
 -- =========================================================
--- FACT SALES
+-- FACT SALES  (Table + View)
 -- =========================================================
 IF OBJECT_ID('gold.FactSales', 'U') IS NULL
 BEGIN
@@ -190,7 +166,7 @@ BEGIN
         CONSTRAINT FK_FactSales_Shipping  FOREIGN KEY (ShippingKey)  REFERENCES gold.DIMShipping(ShippingKey),
         CONSTRAINT FK_FactSales_OrderDate FOREIGN KEY (OrderDateKey) REFERENCES gold.DIMDate(DateKey),
         CONSTRAINT FK_FactSales_ShipDate  FOREIGN KEY (ShipDateKey)  REFERENCES gold.DIMDate(DateKey)
-    )
+    );
 END;
 GO
 
@@ -225,18 +201,46 @@ WHERE s.HasMissingValue = 0
   AND s.HasInvalidValue = 0;
 GO
 
-INSERT INTO gold.FactSales
-(
-    RowID, OrderID, CustomerKey, ProductKey, GeographyKey, ShippingKey,
-    OrderDateKey, ShipDateKey, Sales, Quantity, Discount, Profit
-)
-SELECT
-    v.RowID, v.OrderID, v.CustomerKey, v.ProductKey, v.GeographyKey, v.ShippingKey,
-    v.OrderDateKey, v.ShipDateKey, v.Sales, v.Quantity, v.Discount, v.Profit
-FROM gold.vw_FactSalesStaging v
-WHERE NOT EXISTS (
-    SELECT 1 FROM gold.FactSales f WHERE f.RowID = v.RowID
-);
-GO
 
-SELECT * FROM gold.FactSales;
+-- =========================================================
+-- PROCEDURE: تستخدم كل الـ Views اللي فوق
+-- =========================================================
+CREATE OR ALTER PROCEDURE gold.usp_LoadGold
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO gold.DIMCustomer (CustomerID, CustomerName, Segment)
+    SELECT CustomerID, CustomerName, Segment
+    FROM gold.vw_DIMCustomerStaging;
+
+    INSERT INTO gold.DIMProduct (ProductID, ProductName, Category, SubCategory)
+    SELECT ProductID, ProductName, Category, SubCategory
+    FROM gold.vw_DIMProductStaging;
+
+    INSERT INTO gold.DIMGeography (Country, City, State, PostalCode, Region)
+    SELECT Country, City, State, PostalCode, Region
+    FROM gold.vw_DIMGeographyStaging;
+
+    INSERT INTO gold.DIMShipping (ShipMode)
+    SELECT ShipMode
+    FROM gold.vw_DIMShippingStaging;
+
+    INSERT INTO gold.DIMDate (DateKey, [Date], [Year], Quarter, [Month], [Day])
+    SELECT DateKey, [Date], [Year], Quarter, [Month], [Day]
+    FROM gold.vw_DIMDateStaging;
+
+    INSERT INTO gold.FactSales
+    (
+        RowID, OrderID, CustomerKey, ProductKey, GeographyKey, ShippingKey,
+        OrderDateKey, ShipDateKey, Sales, Quantity, Discount, Profit
+    )
+    SELECT
+        v.RowID, v.OrderID, v.CustomerKey, v.ProductKey, v.GeographyKey, v.ShippingKey,
+        v.OrderDateKey, v.ShipDateKey, v.Sales, v.Quantity, v.Discount, v.Profit
+    FROM gold.vw_FactSalesStaging v
+    WHERE NOT EXISTS (
+        SELECT 1 FROM gold.FactSales f WHERE f.RowID = v.RowID
+    );
+END;
+GO

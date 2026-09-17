@@ -1,0 +1,1 @@
+EXEC dbo.usp_RunFullPipeline @FilePath = 'D:\Data Analysis\sql\MINI PROJECT\Central_Superstore.csv';
