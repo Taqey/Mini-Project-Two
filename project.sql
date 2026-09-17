@@ -1,6 +1,8 @@
 IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = 'CentralSuperStoreDB')
+begin
     CREATE DATABASE CentralSuperStoreDB;
-
+end
+GO
 USE CentralSuperStoreDB;
 SELECT *
 FROM sys.schemas;
