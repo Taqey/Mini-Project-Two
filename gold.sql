@@ -13,13 +13,20 @@ BEGIN
         Segment      NVARCHAR(50)
     )
 END;
+GO
 
-INSERT INTO gold.DIMCustomer (CustomerID, CustomerName, Segment)
+CREATE OR ALTER VIEW gold.vw_DIMCustomerStaging AS
 SELECT DISTINCT s.CustomerID, s.CustomerName, s.Segment
 FROM silver.RawData s
 WHERE NOT EXISTS (
     SELECT 1 FROM gold.DIMCustomer d WHERE d.CustomerID = s.CustomerID
 );
+GO
+
+INSERT INTO gold.DIMCustomer (CustomerID, CustomerName, Segment)
+SELECT CustomerID, CustomerName, Segment
+FROM gold.vw_DIMCustomerStaging;
+GO
 
 
 -- =========================================================
@@ -36,13 +43,20 @@ BEGIN
         SubCategory NVARCHAR(50)
     )
 END;
+GO
 
-INSERT INTO gold.DIMProduct (ProductID, ProductName, Category, SubCategory)
+CREATE OR ALTER VIEW gold.vw_DIMProductStaging AS
 SELECT DISTINCT s.ProductID, s.ProductName, s.Category, s.SubCategory
 FROM silver.RawData s
 WHERE NOT EXISTS (
     SELECT 1 FROM gold.DIMProduct d WHERE d.ProductID = s.ProductID
 );
+GO
+
+INSERT INTO gold.DIMProduct (ProductID, ProductName, Category, SubCategory)
+SELECT ProductID, ProductName, Category, SubCategory
+FROM gold.vw_DIMProductStaging;
+GO
 
 
 -- =========================================================
@@ -60,8 +74,9 @@ BEGIN
         Region       NVARCHAR(50)
     )
 END;
+GO
 
-INSERT INTO gold.DIMGeography (Country, City, State, PostalCode, Region)
+CREATE OR ALTER VIEW gold.vw_DIMGeographyStaging AS
 SELECT DISTINCT s.Country, s.City, s.State, s.PostalCode, s.Region
 FROM silver.RawData s
 WHERE NOT EXISTS (
@@ -72,6 +87,12 @@ WHERE NOT EXISTS (
     AND    d.PostalCode = s.PostalCode
     AND    d.Region     = s.Region
 );
+GO
+
+INSERT INTO gold.DIMGeography (Country, City, State, PostalCode, Region)
+SELECT Country, City, State, PostalCode, Region
+FROM gold.vw_DIMGeographyStaging;
+GO
 
 
 -- =========================================================
@@ -85,13 +106,20 @@ BEGIN
         ShipMode    NVARCHAR(50)
     )
 END;
+GO
 
-INSERT INTO gold.DIMShipping (ShipMode)
+CREATE OR ALTER VIEW gold.vw_DIMShippingStaging AS
 SELECT DISTINCT s.ShipMode
 FROM silver.RawData s
 WHERE NOT EXISTS (
     SELECT 1 FROM gold.DIMShipping d WHERE d.ShipMode = s.ShipMode
 );
+GO
+
+INSERT INTO gold.DIMShipping (ShipMode)
+SELECT ShipMode
+FROM gold.vw_DIMShippingStaging;
+GO
 
 
 -- =========================================================
@@ -109,15 +137,16 @@ BEGIN
         [Day]   INT
     )
 END;
+GO
 
-INSERT INTO gold.DIMDate (DateKey, [Date], [Year], Quarter, [Month], [Day])
+CREATE OR ALTER VIEW gold.vw_DIMDateStaging AS
 SELECT
     CONVERT(INT, FORMAT(d.[Date], 'yyyyMMdd')) AS DateKey,
     d.[Date],
-    YEAR(d.[Date]),
-    DATEPART(QUARTER, d.[Date]),
-    MONTH(d.[Date]),
-    DAY(d.[Date])
+    YEAR(d.[Date])              AS [Year],
+    DATEPART(QUARTER, d.[Date]) AS Quarter,
+    MONTH(d.[Date])             AS [Month],
+    DAY(d.[Date])               AS [Day]
 FROM
 (
     SELECT DISTINCT OrderDate AS [Date] FROM silver.RawData WHERE OrderDate IS NOT NULL
@@ -127,6 +156,12 @@ FROM
 WHERE NOT EXISTS (
     SELECT 1 FROM gold.DIMDate g WHERE g.DateKey = CONVERT(INT, FORMAT(d.[Date], 'yyyyMMdd'))
 );
+GO
+
+INSERT INTO gold.DIMDate (DateKey, [Date], [Year], Quarter, [Month], [Day])
+SELECT DateKey, [Date], [Year], Quarter, [Month], [Day]
+FROM gold.vw_DIMDateStaging;
+GO
 
 
 -- =========================================================
@@ -157,12 +192,9 @@ BEGIN
         CONSTRAINT FK_FactSales_ShipDate  FOREIGN KEY (ShipDateKey)  REFERENCES gold.DIMDate(DateKey)
     )
 END;
+GO
 
-INSERT INTO gold.FactSales
-(
-    RowID, OrderID, CustomerKey, ProductKey, GeographyKey, ShippingKey,
-    OrderDateKey, ShipDateKey, Sales, Quantity, Discount, Profit
-)
+CREATE OR ALTER VIEW gold.vw_FactSalesStaging AS
 SELECT
     s.RowID,
     s.OrderID,
@@ -170,8 +202,8 @@ SELECT
     p.ProductKey,
     g.GeographyKey,
     sh.ShippingKey,
-    CONVERT(INT, FORMAT(s.OrderDate, 'yyyyMMdd')),
-    CONVERT(INT, FORMAT(s.ShipDate, 'yyyyMMdd')),
+    CONVERT(INT, FORMAT(s.OrderDate, 'yyyyMMdd')) AS OrderDateKey,
+    CONVERT(INT, FORMAT(s.ShipDate, 'yyyyMMdd'))  AS ShipDateKey,
     s.Sales,
     s.Quantity,
     s.Discount,
@@ -189,11 +221,22 @@ LEFT JOIN gold.DIMGeography g
     AND s.Region     = g.Region
 LEFT JOIN gold.DIMShipping sh
     ON s.ShipMode = sh.ShipMode
-    
 WHERE s.HasMissingValue = 0
-  AND s.HasInvalidValue = 0
-  AND NOT EXISTS (
-      SELECT 1 FROM gold.FactSales f WHERE f.RowID = s.RowID
-  );
+  AND s.HasInvalidValue = 0;
+GO
+
+INSERT INTO gold.FactSales
+(
+    RowID, OrderID, CustomerKey, ProductKey, GeographyKey, ShippingKey,
+    OrderDateKey, ShipDateKey, Sales, Quantity, Discount, Profit
+)
+SELECT
+    v.RowID, v.OrderID, v.CustomerKey, v.ProductKey, v.GeographyKey, v.ShippingKey,
+    v.OrderDateKey, v.ShipDateKey, v.Sales, v.Quantity, v.Discount, v.Profit
+FROM gold.vw_FactSalesStaging v
+WHERE NOT EXISTS (
+    SELECT 1 FROM gold.FactSales f WHERE f.RowID = v.RowID
+);
+GO
 
 SELECT * FROM gold.FactSales;
